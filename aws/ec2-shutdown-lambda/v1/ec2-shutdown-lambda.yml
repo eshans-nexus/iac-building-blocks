@@ -1,0 +1,300 @@
+---
+# Copyright 2024-2026 The MathWorks, Inc.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MathWorks Reference Architecture - EC2 Instance Shutdown Template - Automates the shutdown of an EC2 instance after a few hours.
+
+Parameters:
+  EC2InstanceId:
+    Description: ID of the EC2 instance to shut down.
+    Type: String
+
+  MathWorksProductId:
+    Description: Value of the MathWorks product ID tag 'mw-ProductID' on the EC2 instance. This parameter restricts the IAM access permissions of the Lambda function to that product only.
+    Type: String
+
+  ShutdownBehaviour:
+    Description: Number of hours after which to stop the EC2 instance. Actual shutdown time might vary by 5 minutes.
+    Type: String
+    AllowedValues:
+      - Never
+      - After 1 hour
+      - After 2 hours
+      - After 3 hours
+      - After 4 hours
+      - After 5 hours
+      - After 6 hours
+      - After 7 hours
+      - After 8 hours
+      - After 9 hours
+      - After 10 hours
+      - After 11 hours
+      - After 12 hours
+      - After 13 hours
+      - After 14 hours
+      - After 15 hours
+      - After 16 hours
+      - After 17 hours
+      - After 18 hours
+      - After 19 hours
+      - After 20 hours
+      - After 21 hours
+      - After 22 hours
+      - After 23 hours
+      - After 24 hours
+
+  TagToMonitor:
+    Description: Tag key whose value specifies when the instance will shut down. Update this tag value to update the time when you want your instance to shut down.
+    Type: String
+    Default: mw-autoshutdown
+
+  AutoShutdownLambdaLogRetentionInDays:
+    Description: Number of days to retain the logs for the Auto-shutdown Lambda function.
+    Type: Number
+    Default: 7
+
+  ShutdownLambdaExecutionRoleArn:
+    Type: String
+    Default: ''
+    Description: (Optional) ARN of an existing IAM role to be used by the lambda function. Ensure that the IAM role has the necessary permissions to read EC2 tags and stop it. If you leave this parameter blank, a new IAM role is created.
+    AllowedPattern: ^(arn:(aws|aws-cn|aws-us-gov):iam::\d{12}:role(\/[\w-]*)*)?$
+  
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Shutdown Configuration"
+        Parameters:
+          - EC2InstanceId
+          - ShutdownBehaviour
+          - TagToMonitor
+          - AutoShutdownLambdaLogRetentionInDays
+      - Label:
+          default: "Permission Configuration"
+        Parameters:
+          - MathWorksProductId
+          - ShutdownLambdaExecutionRoleArn
+    ParameterLabels:
+      EC2InstanceId:
+        default: "EC2 Instance ID"
+      ShutdownBehaviour:
+        default: "Shutdown Behavior"
+      TagToMonitor:
+        default: "Tag to Monitor"
+      ShutdownLambdaExecutionRoleArn:
+        default: "Auto-shutdown Lambda Execution Role ARN"
+      AutoShutdownLambdaLogRetentionInDays:
+        default: "Lambda Log Retention Days"
+      MathWorksProductId:
+        default: "MathWorks Product ID"
+
+Conditions:
+  CreateNewRole: !Equals [!Ref ShutdownLambdaExecutionRoleArn, '']
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: CreateNewRole
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+            Action: sts:AssumeRole
+      Path: /MW/
+      Policies:
+        - PolicyName: EC2ShutdownLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                  - ec2:CreateTags
+                  - ec2:DeleteTags
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/mw-ProductID:
+                      - !Ref MathWorksProductId
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeTags
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*EC2ShutdownLambda*
+
+  EC2ShutdownLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !If 
+        - CreateNewRole
+        - !GetAtt LambdaExecutionRole.Arn
+        - !Ref ShutdownLambdaExecutionRoleArn
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          from datetime import datetime, timedelta, UTC
+          from botocore.exceptions import ClientError
+          from typing import Dict, Any, Optional
+
+          ec2 = boto3.client('ec2')
+
+          def get_instance(instance_id: str) -> Optional[Dict[str, Any]]:
+              """
+              Retrieve EC2 instance details. 
+              Returns the instance object if found, None otherwise.
+              """
+              try:
+                  response: Dict[str, Any] = ec2.describe_instances(InstanceIds=[instance_id])
+                  if len(response['Reservations']) == 0 or len(response['Reservations'][0]['Instances']) == 0:
+                      print(f"No instance found with the provided EC2 Instance ID: {instance_id}")
+                      return None
+                  
+                  instance: Dict[str, Any] = response['Reservations'][0]['Instances'][0]
+                  return instance
+
+              # Handle case where an invalid or non-existent instance ID is provided
+              except ClientError as e:
+                  print(f"Invalid or non-existent EC2 Instance ID: {instance_id}. Error: {e}")
+                  return None
+
+          def is_instance_running(instance_response: Dict[str, Any]) -> bool:
+              """
+              Check if the instance is in a state where shutdown actions can be performed.
+              Returns True if the instance is running, False otherwise.
+              """
+              state: str = instance_response['State']['Name']
+              if state != 'running':
+                  print(f"EC2 instance is not in running state (current state: {state}), skipping any action.")
+                  return False
+              return True
+
+          def shutdown_instance(instance_id: str, tag_to_monitor: str) -> None:
+              """
+              Stop the EC2 instance and remove the shutdown tag.
+              """
+              print(f"Stopping EC2 instance {instance_id}")
+              ec2.stop_instances(InstanceIds=[instance_id])
+              print(f"EC2 instance {instance_id} has been stopped.")
+              
+              ec2.delete_tags(Resources=[instance_id], Tags=[{'Key': tag_to_monitor}])
+              print(f"The tag {tag_to_monitor} has been removed from EC2 instance {instance_id}.")
+
+          def set_shutdown_tag(instance_id: str, tag_to_monitor: str, hours: int) -> None:
+              """
+              Set the shutdown tag with the calculated shutdown time.
+              """
+              shutdown_time: datetime = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=hours)
+              tag_timestamp: str = shutdown_time.strftime('%a, %d %b %Y %H:%M:%S GMT')
+              
+              remaining_minutes: int = int((shutdown_time - datetime.now(UTC).replace(tzinfo=None)).total_seconds() // 60)
+              print(f"Adding the tag {tag_to_monitor} with value {tag_timestamp}. EC2 instance is set to stop after {remaining_minutes} minutes.")
+              ec2.create_tags(Resources=[instance_id], Tags=[{'Key': tag_to_monitor, 'Value': tag_timestamp}])
+
+          def handler(event: Dict[str, Any], context: Any) -> None:
+              instance_id: str = os.environ['EC2_INSTANCE_ID']
+              shutdown_behaviour: str = os.environ['SHUTDOWN_BEHAVIOUR']
+              tag_to_monitor: str = os.environ['TAG_TO_MONITOR']
+
+              instance: Optional[Dict[str, Any]] = get_instance(instance_id)
+              if not instance:
+                  # If an instance is not found, an error string will be printed by get_instance().
+                  return
+              
+              instance_last_start_time = instance.get('LaunchTime')
+              tags: Dict[str, str] = {tag['Key']: tag['Value'] for tag in instance.get('Tags', [])}
+              
+              if not is_instance_running(instance):
+                  # Delete the shutdown tag if it exists
+                  if tag_to_monitor in tags:
+                      ec2.delete_tags(Resources=[instance_id],Tags=[{'Key': tag_to_monitor}])
+                      print(f"Removed {tag_to_monitor} tag from EC2 instance {instance_id} (instance not running).")
+                  return
+
+              if tag_to_monitor in tags:
+                  shutdown_time: datetime = datetime.strptime(tags[tag_to_monitor], '%a, %d %b %Y %H:%M:%S GMT')
+                  
+                  if instance_last_start_time is None:
+                      print("LaunchTime of EC2 instance is None, skipping comparison with shutdown_time.")
+                      return
+
+                  instance_last_start_time_naive = instance_last_start_time.replace(tzinfo=None)
+
+                  # Stale tag: instance was restarted after the scheduled shutdown time, skip action
+                  if instance_last_start_time_naive >= shutdown_time:
+                      print(f"Shutdown tag is stale (instance started at {instance_last_start_time_naive}, shutdown was scheduled for {shutdown_time}). Skipping.")
+                      return
+                  
+                  now = datetime.now(UTC).replace(tzinfo=None)
+                  if now >= shutdown_time:
+                      shutdown_instance(instance_id, tag_to_monitor)
+                  else:
+                      remaining_minutes: int = int((shutdown_time - now).total_seconds() // 60)
+                      print(f"No action needed. EC2 instance {instance_id} will shut down at {shutdown_time}. Remaining minutes: {remaining_minutes}")
+              else:
+                  if shutdown_behaviour == 'Never':
+                      print(f"Shutdown behavior parameter is set to Never, and there is no '{tag_to_monitor}' tag. Skipping...")
+                      return
+                  
+                  hours: int = int(shutdown_behaviour.split(' ')[1])
+                  set_shutdown_tag(instance_id, tag_to_monitor, hours)
+
+      Runtime: python3.12
+      Timeout: 60
+      Environment:
+        Variables:
+          EC2_INSTANCE_ID: !Ref EC2InstanceId
+          SHUTDOWN_BEHAVIOUR: !Ref ShutdownBehaviour
+          TAG_TO_MONITOR: !Ref TagToMonitor
+
+  CloudWatchEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(5 minutes)
+      Targets:
+        - Arn: !GetAtt EC2ShutdownLambda.Arn
+          Id: EC2ShutdownLambdaTarget
+
+  ShutdownLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EC2ShutdownLambda
+      Action: lambda:InvokeFunction
+      Principal: !Sub events.${AWS::URLSuffix}
+      SourceArn: !GetAtt CloudWatchEventRule.Arn
+
+  ShutdownLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${EC2ShutdownLambda}
+      RetentionInDays: !Ref AutoShutdownLambdaLogRetentionInDays
+
+Outputs:
+  EC2ShutdownLambdaArn:
+    Description: The ARN of the EC2 Shutdown Lambda function
+    Value: !GetAtt EC2ShutdownLambda.Arn
+  ShutdownLambdaExecutionRoleArn:
+    Description: The ARN of the Shutdown Lambda Execution Role
+    Value: !If 
+      - CreateNewRole
+      - !GetAtt LambdaExecutionRole.Arn
+      - !Ref ShutdownLambdaExecutionRoleArn
+  ShutdownLambdaLogGroupArn:
+    Description: The ARN of the Shutdown Lambda Log Group
+    Value: !GetAtt ShutdownLambdaLogGroup.Arn
