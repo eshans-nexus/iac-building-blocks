@@ -71,6 +71,8 @@ jobs:
           # Existing instance profile for the build instance; empty keeps the template's default.
           # Packer reads PKR_VAR_<name> as a template variable: https://developer.hashicorp.com/packer/guides/hcl/variables#from-environment-variables
           PKR_VAR_AWS_INSTANCE_PROFILE: ${{ vars.PACKER_BUILDER_INSTANCE_PROFILE }}
+          # Test copy only: Packer debug log (stderr) to see how each SSH session ends.
+          PACKER_LOG: "1"
         run: |
           set -o pipefail
           packer init .
