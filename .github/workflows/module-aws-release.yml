@@ -55,7 +55,7 @@ jobs:
 
       - name: Publish AMI
         id: publish_ami
-        uses: eshans-nexus/iac-building-blocks/.github/actions/publish-ami@main
+        uses: eshans-nexus/iac-building-blocks/.github/actions/publish-ami@nvesangi/mise-ci-poc
         with:
           ami_id: ${{ inputs.ami_id }}
           source_ami_region: ${{ inputs.source_region }}

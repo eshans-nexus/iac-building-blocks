@@ -30,7 +30,7 @@ This action handles the cross-region publishing of a newly minted AMI. It takes 
 ```yaml
 - name: Publish Built AMI
   id: publish_ami
-  uses: eshans-nexus/iac-building-blocks/.github/actions/publish-ami@main
+  uses: eshans-nexus/iac-building-blocks/.github/actions/publish-ami@nvesangi/mise-ci-poc
   with:
     ami_id: 'ami-0123456789abcdef0'
     source_ami_region: 'us-east-1'

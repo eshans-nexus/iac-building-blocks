@@ -113,7 +113,7 @@ jobs:
       - name: Run Smoke Tests
         id: smoke-test
         timeout-minutes: 10
-        uses: eshans-nexus/iac-building-blocks/.github/actions/run-smoke-tests@main
+        uses: eshans-nexus/iac-building-blocks/.github/actions/run-smoke-tests@nvesangi/mise-ci-poc
         with:
           region: ${{ inputs.region }}
           stack_name: ${{ env.STACK_NAME }}

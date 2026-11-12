@@ -74,7 +74,7 @@ on:
 
 jobs:
   build:
-    uses: eshans-nexus/iac-building-blocks/.github/workflows/module-aws-packer-build.yml@main
+    uses: eshans-nexus/iac-building-blocks/.github/workflows/module-aws-packer-build.yml@nvesangi/mise-ci-poc
     with:
       matlab_version: ${{ inputs.matlab_version }}
       skip_build: ${{ inputs.skip_build }}
@@ -84,7 +84,7 @@ jobs:
   smoke-test:
     if: ${{ inputs.skip_test == false }}
     needs: build
-    uses: eshans-nexus/iac-building-blocks/.github/workflows/module-aws-smoke-test.yml@main
+    uses: eshans-nexus/iac-building-blocks/.github/workflows/module-aws-smoke-test.yml@nvesangi/mise-ci-poc
     with:
       ami_id: ${{ needs.build.outputs.ami_id }}
       refarch_type: ${{ inputs.refarch_type }}
@@ -98,7 +98,7 @@ jobs:
   release:
     if: ${{ inputs.is_supplementary_build == false }}
     needs: [build, smoke-test]
-    uses: eshans-nexus/iac-building-blocks/.github/workflows/module-aws-release.yml@main
+    uses: eshans-nexus/iac-building-blocks/.github/workflows/module-aws-release.yml@nvesangi/mise-ci-poc
     with:
       ami_id: ${{ needs.build.outputs.ami_id }}
       refarch_type: ${{ inputs.refarch_type }}

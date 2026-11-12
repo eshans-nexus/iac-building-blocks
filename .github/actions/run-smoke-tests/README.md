@@ -26,7 +26,7 @@ This action executes pytest-based end-to-end smoke tests against a live CloudFor
 ```yaml
 - name: Run Smoke Tests
   id: smoke-tests
-  uses: eshans-nexus/iac-building-blocks/.github/actions/run-smoke-tests@main
+  uses: eshans-nexus/iac-building-blocks/.github/actions/run-smoke-tests@nvesangi/mise-ci-poc
   with:
     region: 'us-east-1'
     stack_name: 'test-stack-12345'

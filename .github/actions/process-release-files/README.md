@@ -31,7 +31,7 @@ This action handles the final documentation assembly prior to a GitHub Release. 
 
 ```yaml
 - name: Process and Assemble Documentation
-  uses: eshans-nexus/iac-building-blocks/.github/actions/process-release-files@main
+  uses: eshans-nexus/iac-building-blocks/.github/actions/process-release-files@nvesangi/mise-ci-poc
   with:
     target_versions: '["R2025a", "R2024b"]'
     source_path: './src'
