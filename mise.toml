@@ -1,0 +1,18 @@
+# Copyright 2026 The MathWorks, Inc.
+
+# Entry points for the CI steps in this repository. The same `mise run` commands run in GitHub
+# Actions, in other CI systems and locally.
+#
+# Each executable script in ci/<cloud>/ is a task named <cloud>:<script>, such as ci/aws/deploy-stack.sh
+# as aws:deploy-stack; `mise tasks ls` lists them. Each script declares its description and the tools
+# it needs in its #MISE lines, so a task installs only its own tools.
+#
+# The scripts take their inputs as environment variables, listed at the top of each script. Tasks
+# run in this directory: give absolute paths, or set BASE_DIR to the directory they are relative to.
+# How to run them yourself: ci/README.md.
+
+# The oldest mise these tasks are checked with.
+min_version = "2026.10.8"
+
+[task_config]
+includes = ["ci"]
