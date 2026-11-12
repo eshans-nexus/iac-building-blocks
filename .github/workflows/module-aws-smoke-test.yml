@@ -113,14 +113,11 @@ jobs:
       - name: Run Smoke Tests
         id: smoke-test
         timeout-minutes: 10
-        uses: eshans-nexus/iac-building-blocks/.github/actions/run-smoke-tests@nvesangi/mise-ci-poc
-        with:
-          region: ${{ inputs.region }}
-          stack_name: ${{ env.STACK_NAME }}
-          matlab_license_string: ${{ secrets.MATLAB_LICENSE_STRING }}
-          python_version: ${{ vars.PYTHON_VERSION || '3.11' }}
-          mock_build: ${{ inputs.mock_build }}
-          ami_id: ${{ inputs.ami_id }}
+        env:
+          AWS_REGION: ${{ inputs.region }}
+          MOCK_BUILD: ${{ inputs.mock_build }}
+          EXPECTED_AMI_ID: ${{ inputs.ami_id }}
+        run: mise run e2e
 
       - name: Cleanup
         if: always() && steps.deploy.outcome != 'skipped'
